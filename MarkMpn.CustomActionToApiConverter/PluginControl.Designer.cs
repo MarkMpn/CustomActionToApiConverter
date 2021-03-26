@@ -131,6 +131,7 @@ namespace MarkMpn.CustomActionToApiConverter
             this.customActionListView.TabIndex = 2;
             this.customActionListView.UseCompatibleStateImageBehavior = false;
             this.customActionListView.View = System.Windows.Forms.View.Details;
+            this.customActionListView.SelectedIndexChanged += new System.EventHandler(this.customActionListView_SelectedIndexChanged);
             // 
             // columnHeader1
             // 

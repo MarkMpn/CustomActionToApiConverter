@@ -161,6 +161,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CustomAction.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="PluginControl.cs">
       <SubType>UserControl</SubType>

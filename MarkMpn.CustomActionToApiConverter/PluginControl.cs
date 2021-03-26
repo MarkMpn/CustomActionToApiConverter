@@ -97,7 +97,7 @@ namespace MarkMpn.CustomActionToApiConverter
                     componentLink.LinkCriteria.AddCondition("solutionid", ConditionOperator.Equal, solutionId);
                     var sdkMessageLink = qry.AddLink("sdkmessage", "sdkmessageid", "sdkmessageid");
                     sdkMessageLink.EntityAlias = "msg";
-                    sdkMessageLink.Columns = new ColumnSet("name");
+                    sdkMessageLink.Columns = new ColumnSet("name", "sdkmessageid");
                     qry.AddOrder("name", OrderType.Ascending);
 
                     var results = Service.RetrieveMultiple(qry);
@@ -114,6 +114,83 @@ namespace MarkMpn.CustomActionToApiConverter
                         lvi.Tag = action;
                         lvi.Checked = true;
                     }
+                }
+            });
+        }
+
+        private void customActionListView_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            propertyGrid.SelectedObject = null;
+
+            if (customActionListView.SelectedItems.Count != 1)
+                return;
+
+            var sdkMessageId = (Guid) ((Entity)customActionListView.SelectedItems[0].Tag).GetAttributeValue<AliasedValue>("msg.sdkmessageid").Value;
+
+            WorkAsync(new WorkAsyncInfo
+            {
+                Message = "Loading Custom Action Details...",
+                Work = (bw, args) =>
+                {
+                    var qry = new QueryExpression("sdkmessage");
+                    qry.ColumnSet = new ColumnSet("name");
+                    qry.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
+                    var workflowLink = qry.AddLink("workflow", "sdkmessageid", "sdkmessageid");
+                    workflowLink.EntityAlias = "wf";
+                    workflowLink.Columns = new ColumnSet("name", "description", "primaryentity");
+                    workflowLink.LinkCriteria.AddCondition("type", ConditionOperator.Equal, 1); // Definition
+
+                    var workflowDetails = Service.RetrieveMultiple(qry).Entities.Single();
+
+                    var reqParamQry = new QueryExpression("sdkmessagerequestfield");
+                    reqParamQry.Distinct = true;
+                    reqParamQry.ColumnSet = new ColumnSet("clrparser", "name", "optional");
+                    var reqLink = reqParamQry.AddLink("sdkmessagerequest", "sdkmessagerequestid", "sdkmessagerequestid");
+                    var pairLink = reqLink.AddLink("sdkmessagepair", "sdkmessagepairid", "sdkmessagepairid");
+                    pairLink.LinkCriteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
+                    reqParamQry.AddOrder("position", OrderType.Ascending);
+
+                    var requestParameters = Service.RetrieveMultiple(reqParamQry);
+
+                    var respParamQry = new QueryExpression("sdkmessageresponsefield");
+                    respParamQry.Distinct = true;
+                    respParamQry.ColumnSet = new ColumnSet("clrformatter", "formatter", "name");
+                    var respLink = respParamQry.AddLink("sdkmessageresponse", "sdkmessageresponseid", "sdkmessageresponseid");
+                    reqLink = respLink.AddLink("sdkmessagerequest", "sdkmessagerequestid", "sdkmessagerequestid");
+                    pairLink = reqLink.AddLink("sdkmessagepair", "sdkmessagepairid", "sdkmessagepairid");
+                    pairLink.LinkCriteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
+                    respParamQry.AddOrder("position", OrderType.Ascending);
+
+                    var responseParameters = Service.RetrieveMultiple(respParamQry);
+
+                    var action = new CustomAction
+                    {
+                        MessageName = workflowDetails.GetAttributeValue<string>("name"),
+                        Name = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.name").Value,
+                        Description = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.description")?.Value,
+                        PrimaryEntity = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.primaryentity")?.Value,
+                        RequestParameters = requestParameters.Entities
+                            .Select(param => new RequestParameter
+                            {
+                                Name = param.GetAttributeValue<string>("name"),
+                                Required = !param.GetAttributeValue<bool>("optional"),
+                                Type = Type.GetType(param.GetAttributeValue<string>("clrparser"))
+                            })
+                            .ToList(),
+                        ResponseParameters = responseParameters.Entities
+                            .Select(param => new ResponseParameter
+                            {
+                                Name = param.GetAttributeValue<string>("name"),
+                                Type = Type.GetType(param.GetAttributeValue<string>("clrformatter")) // TODO: Handle special cases using "formatter" field instead
+                            })
+                            .ToList()
+                    };
+
+                    args.Result = action;
+                },
+                PostWorkCallBack = args =>
+                {
+                    propertyGrid.SelectedObject = args.Result;
                 }
             });
         }
