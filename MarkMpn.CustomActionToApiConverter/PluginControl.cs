@@ -43,6 +43,9 @@ namespace MarkMpn.CustomActionToApiConverter
                 {
                     var qry = new QueryExpression("solution");
                     qry.ColumnSet = new ColumnSet("solutionid", "friendlyname");
+                    // Ignore Active and Default solutions
+                    qry.Criteria.AddCondition("solutionid", ConditionOperator.NotIn, new Guid("FD140AAF-4DF4-11DD-BD17-0019B9312238"), new Guid("FD140AAE-4DF4-11DD-BD17-0019B9312238"));
+                    qry.Criteria.AddCondition("ismanaged", ConditionOperator.Equal, false);
                     var componentLink = qry.AddLink("solutioncomponent", "solutionid", "solutionid", JoinOperator.Exists);
                     var workflowLink = componentLink.AddLink("workflow", "objectid", "workflowid");
                     workflowLink.LinkCriteria.AddCondition("category", ConditionOperator.Equal, 3); // Action
@@ -144,21 +147,23 @@ namespace MarkMpn.CustomActionToApiConverter
 
                     var reqParamQry = new QueryExpression("sdkmessagerequestfield");
                     reqParamQry.Distinct = true;
-                    reqParamQry.ColumnSet = new ColumnSet("clrparser", "name", "optional");
+                    reqParamQry.ColumnSet = new ColumnSet("clrparser", "name", "optional", "parameterbindinginformation");
                     var reqLink = reqParamQry.AddLink("sdkmessagerequest", "sdkmessagerequestid", "sdkmessagerequestid");
                     var pairLink = reqLink.AddLink("sdkmessagepair", "sdkmessagepairid", "sdkmessagepairid");
                     pairLink.LinkCriteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
+                    pairLink.LinkCriteria.AddCondition("endpoint", ConditionOperator.Equal, "api/data");
                     reqParamQry.AddOrder("position", OrderType.Ascending);
 
                     var requestParameters = Service.RetrieveMultiple(reqParamQry);
 
                     var respParamQry = new QueryExpression("sdkmessageresponsefield");
                     respParamQry.Distinct = true;
-                    respParamQry.ColumnSet = new ColumnSet("clrformatter", "formatter", "name");
+                    respParamQry.ColumnSet = new ColumnSet("clrformatter", "formatter", "name", "parameterbindinginformation");
                     var respLink = respParamQry.AddLink("sdkmessageresponse", "sdkmessageresponseid", "sdkmessageresponseid");
                     reqLink = respLink.AddLink("sdkmessagerequest", "sdkmessagerequestid", "sdkmessagerequestid");
                     pairLink = reqLink.AddLink("sdkmessagepair", "sdkmessagepairid", "sdkmessagepairid");
                     pairLink.LinkCriteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
+                    pairLink.LinkCriteria.AddCondition("endpoint", ConditionOperator.Equal, "api/data");
                     respParamQry.AddOrder("position", OrderType.Ascending);
 
                     var responseParameters = Service.RetrieveMultiple(respParamQry);
@@ -169,21 +174,21 @@ namespace MarkMpn.CustomActionToApiConverter
                         Name = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.name").Value,
                         Description = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.description")?.Value,
                         PrimaryEntity = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.primaryentity")?.Value,
-                        RequestParameters = requestParameters.Entities
+                        RequestParameters = new ParameterCollection<RequestParameter>(requestParameters.Entities
                             .Select(param => new RequestParameter
                             {
                                 Name = param.GetAttributeValue<string>("name"),
                                 Required = !param.GetAttributeValue<bool>("optional"),
-                                Type = Type.GetType(param.GetAttributeValue<string>("clrparser"))
-                            })
-                            .ToList(),
-                        ResponseParameters = responseParameters.Entities
+                                Type = Type.GetType(param.GetAttributeValue<string>("clrparser")),
+                                BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation")
+                            })),
+                        ResponseParameters = new ParameterCollection<ResponseParameter>(responseParameters.Entities
                             .Select(param => new ResponseParameter
                             {
                                 Name = param.GetAttributeValue<string>("name"),
-                                Type = Type.GetType(param.GetAttributeValue<string>("clrformatter")) // TODO: Handle special cases using "formatter" field instead
-                            })
-                            .ToList()
+                                Type = Type.GetType(param.GetAttributeValue<string>("clrformatter")), // TODO: Handle special cases using "formatter" field instead
+                                BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation")
+                            }))
                     };
 
                     args.Result = action;
