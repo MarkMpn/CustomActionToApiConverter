@@ -120,10 +120,20 @@ namespace MarkMpn.CustomActionToApiConverter
         [Browsable(false)]
         public Type Type { get; set; }
 
-        [ReadOnly(true)]
+        [Browsable(false)]
         public string BindingInformation { get; set; }
 
         private bool ShouldSerializeBindingInformation() => false;
+
+        [ReadOnly(true)]
+        public bool IsBindingTarget { get; set; }
+
+        private bool ShouldSerializeIsBindingTarget() => false;
+
+        [ReadOnly(true)]
+        public string BindingTargetType { get; set; }
+
+        private bool ShouldSerializeBindingTargetType() => false;
     }
 
     class RequestParameter : Parameter

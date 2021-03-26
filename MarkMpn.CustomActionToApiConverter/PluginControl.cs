@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using McTools.Xrm.Connection;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
+using Microsoft.Xrm.Sdk.Metadata.Query;
 using Microsoft.Xrm.Sdk.Query;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
@@ -190,6 +193,41 @@ namespace MarkMpn.CustomActionToApiConverter
                                 BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation")
                             }))
                     };
+
+                    foreach (var boundParam in action.RequestParameters.Where(p => p.BindingInformation != null))
+                    {
+                        if (boundParam.BindingInformation == "Bound:TRUE")
+                        {
+                            boundParam.IsBindingTarget = true;
+                        }
+                        else if (boundParam.BindingInformation.StartsWith("OTC:") && Int32.TryParse(boundParam.BindingInformation.Substring(4), out var otc))
+                        {
+                            var metaQry = new RetrieveMetadataChangesRequest
+                            {
+                                Query = new EntityQueryExpression
+                                {
+                                    Properties = new MetadataPropertiesExpression
+                                    {
+                                        PropertyNames =
+                                        {
+                                            nameof(EntityMetadata.LogicalName)
+                                        }
+                                    },
+                                    Criteria = new MetadataFilterExpression
+                                    {
+                                        Conditions =
+                                        {
+                                            new MetadataConditionExpression(nameof(EntityMetadata.ObjectTypeCode), MetadataConditionOperator.Equals, otc)
+                                        }
+                                    }
+                                }
+                            };
+                            var meta = (RetrieveMetadataChangesResponse) Service.Execute(metaQry);
+
+                            if (meta.EntityMetadata.Count == 1)
+                                boundParam.BindingTargetType = meta.EntityMetadata[0].LogicalName;
+                        }
+                    }
 
                     args.Result = action;
                 },
