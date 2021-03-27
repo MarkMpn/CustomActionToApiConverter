@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Xml;
 using McTools.Xrm.Connection;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -143,7 +144,7 @@ namespace MarkMpn.CustomActionToApiConverter
                     qry.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
                     var workflowLink = qry.AddLink("workflow", "sdkmessageid", "sdkmessageid");
                     workflowLink.EntityAlias = "wf";
-                    workflowLink.Columns = new ColumnSet("name", "description", "primaryentity");
+                    workflowLink.Columns = new ColumnSet("name", "description", "primaryentity", "xaml");
                     workflowLink.LinkCriteria.AddCondition("type", ConditionOperator.Equal, 1); // Definition
 
                     var workflowDetails = Service.RetrieveMultiple(qry).Entities.Single();
@@ -171,11 +172,21 @@ namespace MarkMpn.CustomActionToApiConverter
 
                     var responseParameters = Service.RetrieveMultiple(respParamQry);
 
+                    var stepQry = new QueryExpression("sdkmessageprocessingstep");
+                    stepQry.ColumnSet = new ColumnSet("mode", "stage", "plugintypeid");
+                    stepQry.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
+                    stepQry.Criteria.AddCondition("stage", ConditionOperator.NotEqual, 30); // Exclude standard SyncWorkflowExecution plugin
+                    var pluginLink = stepQry.AddLink("plugintype", "plugintypeid", "plugintypeid");
+                    pluginLink.EntityAlias = "plugin";
+                    pluginLink.Columns = new ColumnSet("name");
+                    var pluginSteps = Service.RetrieveMultiple(stepQry);
+
                     var action = new CustomAction
                     {
                         MessageName = workflowDetails.GetAttributeValue<string>("name"),
                         Name = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.name").Value,
                         Description = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.description")?.Value,
+                        HasWorkflow = HasWorkflow((string)workflowDetails.GetAttributeValue<AliasedValue>("wf.xaml")?.Value),
                         PrimaryEntity = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.primaryentity")?.Value,
                         RequestParameters = new ParameterCollection<RequestParameter>(requestParameters.Entities
                             .Select(param => new RequestParameter
@@ -191,7 +202,16 @@ namespace MarkMpn.CustomActionToApiConverter
                                 Name = param.GetAttributeValue<string>("name"),
                                 Type = Type.GetType(param.GetAttributeValue<string>("clrformatter")), // TODO: Handle special cases using "formatter" field instead
                                 BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation")
-                            }))
+                            })),
+                        PluginSteps = pluginSteps.Entities
+                            .Select(step => new PluginStep
+                            {
+                                PluginId = step.GetAttributeValue<EntityReference>("plugintypeid").Id,
+                                PluginName = (string) step.GetAttributeValue<AliasedValue>("plugin.name").Value,
+                                Sync = step.GetAttributeValue<OptionSetValue>("mode").Value == 0,
+                                Stage = step.GetAttributeValue<OptionSetValue>("stage").Value
+                            })
+                            .ToList()
                     };
 
                     foreach (var boundParam in action.RequestParameters.Where(p => p.BindingInformation != null))
@@ -229,6 +249,14 @@ namespace MarkMpn.CustomActionToApiConverter
                         }
                     }
 
+                    // Autoselect the plugin if there is only one to choose from
+                    var availablePlugins = action.PluginSteps.Where(step => step.Sync && step.Stage == 40).ToList();
+                    if (availablePlugins.Count == 1)
+                        action.Plugin = new EntityReference("plugintype", availablePlugins[0].PluginId) { Name = availablePlugins[0].PluginName };
+
+                    // Autoselect the minimum amount of allowed custom processing steps
+                    action.AllowedCustomProcessingStepType = action.GetAllowedCustomProcessingStepType()[0];
+
                     args.Result = action;
                 },
                 PostWorkCallBack = args =>
@@ -236,6 +264,20 @@ namespace MarkMpn.CustomActionToApiConverter
                     propertyGrid.SelectedObject = args.Result;
                 }
             });
+        }
+
+        private bool HasWorkflow(string xaml)
+        {
+            var xml = new XmlDocument();
+            xml.LoadXml(xaml);
+            var nsmgr = new XmlNamespaceManager(xml.NameTable);
+            nsmgr.AddNamespace("act", "http://schemas.microsoft.com/netfx/2009/xaml/activities");
+            var activity = (XmlElement) xml.SelectSingleNode("/act:Activity", nsmgr);
+            var mxswaNamespace = activity.Attributes.Cast<XmlAttribute>().Single(attr => attr.Name.StartsWith("xmlns:") && attr.Value.StartsWith("clr-namespace:Microsoft.Xrm.Sdk.Workflow.Activities;"));
+            nsmgr.AddNamespace("mxswa", mxswaNamespace.Value);
+            var wf = xml.SelectSingleNode("/act:Activity/mxswa:Workflow", nsmgr);
+
+            return wf.HasChildNodes;
         }
     }
 }
