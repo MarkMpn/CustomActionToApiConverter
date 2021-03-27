@@ -203,7 +203,7 @@ namespace MarkMpn.CustomActionToApiConverter
                             .Select(param => new ResponseParameter
                             {
                                 Name = param.GetAttributeValue<string>("name"),
-                                Type = Type.GetType(param.GetAttributeValue<string>("clrformatter")), // TODO: Handle special cases using "formatter" field instead
+                                Type = Type.GetType(param.GetAttributeValue<string>("clrformatter")),
                                 BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation"),
                                 Description = GetDescription(xaml, param.GetAttributeValue<string>("name"), false)
                             })),
@@ -223,6 +223,7 @@ namespace MarkMpn.CustomActionToApiConverter
                         if (boundParam.BindingInformation == "Bound:TRUE")
                         {
                             boundParam.IsBindingTarget = true;
+                            boundParam.BindingTargetType = action.PrimaryEntity;
                         }
                         else if (boundParam.BindingInformation.StartsWith("OTC:") && Int32.TryParse(boundParam.BindingInformation.Substring(4), out var otc))
                         {

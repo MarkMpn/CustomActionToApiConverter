@@ -229,7 +229,16 @@ namespace MarkMpn.CustomActionToApiConverter
         {
             var param = (Parameter)value;
 
-            // TODO: Use XRM-specific language to match the type names shown in the Custom Action editor UI
+            // Use XRM-specific language to match the type names shown in the Custom Action editor UI
+            if (param.Type == typeof(Double))
+                return "Float";
+
+            if (param.Type == typeof(Int32))
+                return "Integer";
+
+            if (param.Type == typeof(OptionSetValue))
+                return "Picklist";
+
             return param.Type.Name;
         }
     }
