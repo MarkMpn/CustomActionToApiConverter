@@ -119,7 +119,6 @@ namespace MarkMpn.CustomActionToApiConverter
                         var lvi = customActionListView.Items.Add(action.GetAttributeValue<string>("name"));
                         lvi.SubItems.Add((string) action.GetAttributeValue<AliasedValue>("msg.name").Value);
                         lvi.Tag = action;
-                        lvi.Checked = true;
                     }
                 }
             });
@@ -128,6 +127,7 @@ namespace MarkMpn.CustomActionToApiConverter
         private void customActionListView_SelectedIndexChanged(object sender, EventArgs e)
         {
             propertyGrid.SelectedObject = null;
+            convertButton.Enabled = false;
 
             if (customActionListView.SelectedItems.Count != 1)
                 return;
@@ -261,7 +261,9 @@ namespace MarkMpn.CustomActionToApiConverter
                 },
                 PostWorkCallBack = args =>
                 {
+                    selectedActionLabel.Text = ((CustomAction)args.Result).MessageName;
                     propertyGrid.SelectedObject = args.Result;
+                    convertButton.Enabled = true;
                 }
             });
         }
@@ -278,6 +280,17 @@ namespace MarkMpn.CustomActionToApiConverter
             var wf = xml.SelectSingleNode("/act:Activity/mxswa:Workflow", nsmgr);
 
             return wf.HasChildNodes;
+        }
+
+        private void convertButton_Click(object sender, EventArgs e)
+        {
+            var action = (CustomAction)propertyGrid.SelectedObject;
+
+            if (action.HasWorkflow)
+            {
+                if (MessageBox.Show("This Custom Action has a workflow component that will be lost during conversion to a Custom API. You will need to implement a plugin to replicate the same functionality as the workflow.\r\n\r\nAre you sure you want to continue?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+            }
         }
     }
 }

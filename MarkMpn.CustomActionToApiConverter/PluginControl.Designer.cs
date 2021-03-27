@@ -33,19 +33,22 @@ namespace MarkMpn.CustomActionToApiConverter
             this.label1 = new System.Windows.Forms.Label();
             this.solutionPanel = new System.Windows.Forms.Panel();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
-            this.panel1 = new System.Windows.Forms.Panel();
-            this.label2 = new System.Windows.Forms.Label();
             this.customActionListView = new System.Windows.Forms.ListView();
             this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
-            this.button1 = new System.Windows.Forms.Button();
-            this.propertyGrid = new System.Windows.Forms.PropertyGrid();
             this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.panel1 = new System.Windows.Forms.Panel();
+            this.label2 = new System.Windows.Forms.Label();
+            this.propertyGrid = new System.Windows.Forms.PropertyGrid();
+            this.panel2 = new System.Windows.Forms.Panel();
+            this.convertButton = new System.Windows.Forms.Button();
+            this.selectedActionLabel = new System.Windows.Forms.Label();
             this.solutionPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
             this.panel1.SuspendLayout();
+            this.panel2.SuspendLayout();
             this.SuspendLayout();
             // 
             // solutionComboBox
@@ -91,34 +94,13 @@ namespace MarkMpn.CustomActionToApiConverter
             // splitContainer1.Panel2
             // 
             this.splitContainer1.Panel2.Controls.Add(this.propertyGrid);
+            this.splitContainer1.Panel2.Controls.Add(this.panel2);
             this.splitContainer1.Size = new System.Drawing.Size(853, 615);
             this.splitContainer1.SplitterDistance = 525;
             this.splitContainer1.TabIndex = 3;
             // 
-            // panel1
-            // 
-            this.panel1.Controls.Add(this.button1);
-            this.panel1.Controls.Add(this.label2);
-            this.panel1.Dock = System.Windows.Forms.DockStyle.Top;
-            this.panel1.Location = new System.Drawing.Point(0, 0);
-            this.panel1.Name = "panel1";
-            this.panel1.Padding = new System.Windows.Forms.Padding(4);
-            this.panel1.Size = new System.Drawing.Size(525, 34);
-            this.panel1.TabIndex = 1;
-            // 
-            // label2
-            // 
-            this.label2.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.label2.Location = new System.Drawing.Point(4, 4);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(517, 26);
-            this.label2.TabIndex = 0;
-            this.label2.Text = "Custom Actions";
-            this.label2.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
             // customActionListView
             // 
-            this.customActionListView.CheckBoxes = true;
             this.customActionListView.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader1,
             this.columnHeader2});
@@ -138,28 +120,71 @@ namespace MarkMpn.CustomActionToApiConverter
             this.columnHeader1.Text = "Custom Action Name";
             this.columnHeader1.Width = 159;
             // 
-            // button1
-            // 
-            this.button1.Dock = System.Windows.Forms.DockStyle.Right;
-            this.button1.Location = new System.Drawing.Point(446, 4);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(75, 26);
-            this.button1.TabIndex = 1;
-            this.button1.Text = "Convert";
-            this.button1.UseVisualStyleBackColor = true;
-            // 
-            // propertyGrid
-            // 
-            this.propertyGrid.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.propertyGrid.Location = new System.Drawing.Point(0, 0);
-            this.propertyGrid.Name = "propertyGrid";
-            this.propertyGrid.Size = new System.Drawing.Size(324, 615);
-            this.propertyGrid.TabIndex = 0;
-            // 
             // columnHeader2
             // 
             this.columnHeader2.Text = "Message Name";
             this.columnHeader2.Width = 162;
+            // 
+            // panel1
+            // 
+            this.panel1.Controls.Add(this.label2);
+            this.panel1.Dock = System.Windows.Forms.DockStyle.Top;
+            this.panel1.Location = new System.Drawing.Point(0, 0);
+            this.panel1.Name = "panel1";
+            this.panel1.Padding = new System.Windows.Forms.Padding(4);
+            this.panel1.Size = new System.Drawing.Size(525, 34);
+            this.panel1.TabIndex = 1;
+            // 
+            // label2
+            // 
+            this.label2.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.label2.Location = new System.Drawing.Point(4, 4);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(517, 26);
+            this.label2.TabIndex = 0;
+            this.label2.Text = "Custom Actions in Solution";
+            this.label2.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            // 
+            // propertyGrid
+            // 
+            this.propertyGrid.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.propertyGrid.Location = new System.Drawing.Point(0, 34);
+            this.propertyGrid.Name = "propertyGrid";
+            this.propertyGrid.Size = new System.Drawing.Size(324, 581);
+            this.propertyGrid.TabIndex = 3;
+            // 
+            // panel2
+            // 
+            this.panel2.Controls.Add(this.convertButton);
+            this.panel2.Controls.Add(this.selectedActionLabel);
+            this.panel2.Dock = System.Windows.Forms.DockStyle.Top;
+            this.panel2.Location = new System.Drawing.Point(0, 0);
+            this.panel2.Name = "panel2";
+            this.panel2.Padding = new System.Windows.Forms.Padding(4);
+            this.panel2.Size = new System.Drawing.Size(324, 34);
+            this.panel2.TabIndex = 2;
+            // 
+            // convertButton
+            // 
+            this.convertButton.Dock = System.Windows.Forms.DockStyle.Right;
+            this.convertButton.Enabled = false;
+            this.convertButton.Location = new System.Drawing.Point(245, 4);
+            this.convertButton.Name = "convertButton";
+            this.convertButton.Size = new System.Drawing.Size(75, 26);
+            this.convertButton.TabIndex = 1;
+            this.convertButton.Text = "Convert";
+            this.convertButton.UseVisualStyleBackColor = true;
+            this.convertButton.Click += new System.EventHandler(this.convertButton_Click);
+            // 
+            // selectedActionLabel
+            // 
+            this.selectedActionLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.selectedActionLabel.Location = new System.Drawing.Point(4, 4);
+            this.selectedActionLabel.Name = "selectedActionLabel";
+            this.selectedActionLabel.Size = new System.Drawing.Size(316, 26);
+            this.selectedActionLabel.TabIndex = 0;
+            this.selectedActionLabel.Text = "Select a Custom Action to convert";
+            this.selectedActionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // PluginControl
             // 
@@ -176,6 +201,7 @@ namespace MarkMpn.CustomActionToApiConverter
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
             this.panel1.ResumeLayout(false);
+            this.panel2.ResumeLayout(false);
             this.ResumeLayout(false);
 
         }
@@ -189,9 +215,11 @@ namespace MarkMpn.CustomActionToApiConverter
         private System.Windows.Forms.ListView customActionListView;
         private System.Windows.Forms.ColumnHeader columnHeader1;
         private System.Windows.Forms.Panel panel1;
-        private System.Windows.Forms.Button button1;
         private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.PropertyGrid propertyGrid;
         private System.Windows.Forms.ColumnHeader columnHeader2;
+        private System.Windows.Forms.PropertyGrid propertyGrid;
+        private System.Windows.Forms.Panel panel2;
+        private System.Windows.Forms.Button convertButton;
+        private System.Windows.Forms.Label selectedActionLabel;
     }
 }
