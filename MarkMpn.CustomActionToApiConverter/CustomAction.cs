@@ -12,6 +12,9 @@ namespace MarkMpn.CustomActionToApiConverter
 {
     class CustomAction
     {
+        [Browsable(false)]
+        public Guid WorkflowId { get; set; }
+
         [Category("General")]
         [ReadOnly(true)]
         [Description("Display name of the Custom Action")]
@@ -183,6 +186,47 @@ namespace MarkMpn.CustomActionToApiConverter
         [Browsable(false)]
         public Type Type { get; set; }
 
+        internal OptionSetValue TypeOptionSetValue
+        {
+            get
+            {
+                if (Type == typeof(bool))
+                    return new OptionSetValue(0);
+
+                if (Type == typeof(DateTime))
+                    return new OptionSetValue(1);
+
+                if (Type == typeof(Decimal))
+                    return new OptionSetValue(2);
+
+                if (Type == typeof(Entity))
+                    return new OptionSetValue(3);
+
+                if (Type == typeof(EntityCollection))
+                    return new OptionSetValue(4);
+
+                if (Type == typeof(EntityReference))
+                    return new OptionSetValue(5);
+
+                if (Type == typeof(Double))
+                    return new OptionSetValue(6);
+
+                if (Type == typeof(Int32))
+                    return new OptionSetValue(7);
+
+                if (Type == typeof(Money))
+                    return new OptionSetValue(8);
+
+                if (Type == typeof(OptionSetValue))
+                    return new OptionSetValue(9);
+
+                if (Type == typeof(string))
+                    return new OptionSetValue(10);
+
+                throw new NotSupportedException("Unsupported parameter type " + Type);
+            }
+        }
+
         [Browsable(false)]
         public string BindingInformation { get; set; }
 
@@ -245,6 +289,8 @@ namespace MarkMpn.CustomActionToApiConverter
 
     class PluginStep
     {
+        public Guid StepId { get; set; }
+
         public Guid PluginId { get; set; }
 
         public string PluginName { get; set; }

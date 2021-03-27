@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 using McTools.Xrm.Connection;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
@@ -144,7 +145,7 @@ namespace MarkMpn.CustomActionToApiConverter
                     qry.Criteria.AddCondition("sdkmessageid", ConditionOperator.Equal, sdkMessageId);
                     var workflowLink = qry.AddLink("workflow", "sdkmessageid", "sdkmessageid");
                     workflowLink.EntityAlias = "wf";
-                    workflowLink.Columns = new ColumnSet("name", "description", "primaryentity", "xaml");
+                    workflowLink.Columns = new ColumnSet("workflowid", "name", "description", "primaryentity", "xaml");
                     workflowLink.LinkCriteria.AddCondition("type", ConditionOperator.Equal, 1); // Definition
 
                     var workflowDetails = Service.RetrieveMultiple(qry).Entities.Single();
@@ -185,6 +186,7 @@ namespace MarkMpn.CustomActionToApiConverter
 
                     var action = new CustomAction
                     {
+                        WorkflowId = (Guid)workflowDetails.GetAttributeValue<AliasedValue>("wf.workflowid").Value,
                         MessageName = workflowDetails.GetAttributeValue<string>("name"),
                         Name = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.name").Value,
                         Description = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.description")?.Value,
@@ -210,6 +212,7 @@ namespace MarkMpn.CustomActionToApiConverter
                         PluginSteps = pluginSteps.Entities
                             .Select(step => new PluginStep
                             {
+                                StepId = step.Id,
                                 PluginId = step.GetAttributeValue<EntityReference>("plugintypeid").Id,
                                 PluginName = (string) step.GetAttributeValue<AliasedValue>("plugin.name").Value,
                                 Sync = step.GetAttributeValue<OptionSetValue>("mode").Value == 0,
@@ -308,12 +311,151 @@ namespace MarkMpn.CustomActionToApiConverter
         private void convertButton_Click(object sender, EventArgs e)
         {
             var action = (CustomAction)propertyGrid.SelectedObject;
+            var solutionId = (Guid)solutionComboBox.SelectedValue;
 
             if (action.HasWorkflow)
             {
                 if (MessageBox.Show("This Custom Action has a workflow component that will be lost during conversion to a Custom API. You will need to implement a plugin to replicate the same functionality as the workflow.\r\n\r\nAre you sure you want to continue?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                     return;
             }
+
+            WorkAsync(new WorkAsyncInfo
+            {
+                Message = $"Converting {action.MessageName} to Custom API...",
+                Work = (bw, args) =>
+                {
+                    var solutionName = Service.Retrieve("solution", solutionId, new ColumnSet("uniquename")).GetAttributeValue<string>("uniquename");
+                    
+                    const string customapi = nameof(customapi);
+                    const string customapirequestparameter = nameof(customapirequestparameter);
+                    const string customapiresponseproperty = nameof(customapiresponseproperty);
+
+                    var entityDetails = (RetrieveMetadataChangesResponse)Service.Execute(new RetrieveMetadataChangesRequest
+                    {
+                        Query = new EntityQueryExpression
+                        {
+                            Criteria = new MetadataFilterExpression
+                            {
+                                Conditions =
+                                {
+                                    new MetadataConditionExpression(nameof(EntityMetadata.LogicalName), MetadataConditionOperator.In, new object[] { customapi, customapirequestparameter, customapiresponseproperty })
+                                }
+                            },
+                            Properties = new MetadataPropertiesExpression
+                            {
+                                PropertyNames = { nameof(EntityMetadata.LogicalName), nameof(EntityMetadata.ObjectTypeCode) }
+                            }
+                        }
+                    });
+                    var objectTypeCodes = entityDetails.EntityMetadata.ToDictionary(entity => entity.LogicalName, entity => entity.ObjectTypeCode.Value);
+
+                    // TODO: Save the sdkmessageprocessingsteps that are associated with the existing message, including which solutions they were part of and any associated images
+
+                    // TODO: Delete the sdkmessageprocessingsteps. Do this in a transaction so that if one can't be deleted for some reason, we haven't lost any ones that have already been deleted
+                    Service.Execute(new ExecuteTransactionRequest
+                    {
+                    });
+
+                    // Unpublish the custom action
+                    Service.Update(new Entity("workflow", action.WorkflowId)
+                    {
+                        ["statecode"] = new OptionSetValue(0),
+                        ["statuscode"] = new OptionSetValue(1)
+                    });
+
+                    // Delete the custom action
+                    Service.Delete("workflow", action.WorkflowId);
+
+                    // Create the custom API
+                    var api = new Entity(customapi)
+                    {
+                        ["allowedcustomprocessingsteptype"] = new OptionSetValue((int)action.AllowedCustomProcessingStepType),
+                        ["bindingtype"] = new OptionSetValue(action.PrimaryEntity == "none" ? 0 : 1),
+                        ["boundentitylogicalname"] = action.PrimaryEntity == "none" ? null : action.PrimaryEntity,
+                        ["description"] = action.Description ?? action.Name,
+                        ["displayname"] = action.Name,
+                        ["isfunction"] = action.IsFunction,
+                        ["isprivate"] = action.IsPrivate,
+                        ["name"] = action.Name,
+                        ["plugintypeid"] = action.Plugin,
+                        ["uniquename"] = action.MessageName
+                    };
+                    api.Id = Service.Create(api);
+                    Service.Execute(new AddSolutionComponentRequest
+                    {
+                        ComponentId = api.Id,
+                        ComponentType = objectTypeCodes[api.LogicalName],
+                        SolutionUniqueName = solutionName
+                    });
+
+                    // Add the request parameters
+                    foreach (var actionParam in action.RequestParameters)
+                    {
+                        if (actionParam.IsBindingTarget)
+                            continue;
+
+                        var apiParam = new Entity(customapirequestparameter)
+                        {
+                            ["customapiid"] = api.ToEntityReference(),
+                            ["description"] = actionParam.Description,
+                            ["displayname"] = actionParam.Name,
+                            ["isoptional"] = !actionParam.Required,
+                            ["logicalentityname"] = actionParam.BindingTargetType,
+                            ["name"] = $"{action.MessageName}.{actionParam.Name}",
+                            ["type"] = actionParam.TypeOptionSetValue,
+                            ["uniquename"] = actionParam.Name
+                        };
+
+                        apiParam.Id = Service.Create(apiParam);
+                        Service.Execute(new AddSolutionComponentRequest
+                        {
+                            ComponentId = apiParam.Id,
+                            ComponentType = objectTypeCodes[apiParam.LogicalName],
+                            SolutionUniqueName = solutionName
+                        });
+                    }
+
+                    // Add the response parameters
+                    foreach (var actionProp in action.ResponseParameters)
+                    {
+                        var apiProp = new Entity(customapiresponseproperty)
+                        {
+                            ["customapiid"] = api.ToEntityReference(),
+                            ["description"] = actionProp.Description,
+                            ["displayname"] = actionProp.Name,
+                            ["logicalentityname"] = actionProp.BindingTargetType,
+                            ["name"] = $"{action.MessageName}.{actionProp.Name}",
+                            ["type"] = actionProp.TypeOptionSetValue,
+                            ["uniquename"] = actionProp.Name
+                        };
+
+                        apiProp.Id = Service.Create(apiProp);
+                        Service.Execute(new AddSolutionComponentRequest
+                        {
+                            ComponentId = apiProp.Id,
+                            ComponentType = objectTypeCodes[apiProp.LogicalName],
+                            SolutionUniqueName = solutionName
+                        });
+                    }
+
+                    // Remove the post-operation step that has been moved to stage 30
+                    if (action.Plugin != null)
+                    {
+                        var step = action.PluginSteps.First(s => s.PluginId == action.Plugin.Id && s.Stage == 40 && s.Sync);
+                        Service.Delete("sdkmessageprocessingstep", step.StepId);
+                    }
+
+                    // TODO: Recreate the sdkmessageprocessingsteps
+                },
+                PostWorkCallBack = args =>
+                {
+                    if (args.Error != null)
+                        MessageBox.Show(args.Error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                    // Refresh the list of available actions
+                    solutionComboBox_SelectedIndexChanged(sender, e);
+                }
+            });
         }
     }
 }
