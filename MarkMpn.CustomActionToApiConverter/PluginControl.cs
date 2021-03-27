@@ -181,12 +181,14 @@ namespace MarkMpn.CustomActionToApiConverter
                     pluginLink.Columns = new ColumnSet("name");
                     var pluginSteps = Service.RetrieveMultiple(stepQry);
 
+                    var xaml = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.xaml")?.Value;
+
                     var action = new CustomAction
                     {
                         MessageName = workflowDetails.GetAttributeValue<string>("name"),
                         Name = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.name").Value,
                         Description = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.description")?.Value,
-                        HasWorkflow = HasWorkflow((string)workflowDetails.GetAttributeValue<AliasedValue>("wf.xaml")?.Value),
+                        HasWorkflow = HasWorkflow(xaml),
                         PrimaryEntity = (string)workflowDetails.GetAttributeValue<AliasedValue>("wf.primaryentity")?.Value,
                         RequestParameters = new ParameterCollection<RequestParameter>(requestParameters.Entities
                             .Select(param => new RequestParameter
@@ -194,14 +196,16 @@ namespace MarkMpn.CustomActionToApiConverter
                                 Name = param.GetAttributeValue<string>("name"),
                                 Required = !param.GetAttributeValue<bool>("optional"),
                                 Type = Type.GetType(param.GetAttributeValue<string>("clrparser")),
-                                BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation")
+                                BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation"),
+                                Description = GetDescription(xaml, param.GetAttributeValue<string>("name"), true)
                             })),
                         ResponseParameters = new ParameterCollection<ResponseParameter>(responseParameters.Entities
                             .Select(param => new ResponseParameter
                             {
                                 Name = param.GetAttributeValue<string>("name"),
                                 Type = Type.GetType(param.GetAttributeValue<string>("clrformatter")), // TODO: Handle special cases using "formatter" field instead
-                                BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation")
+                                BindingInformation = param.GetAttributeValue<string>("parameterbindinginformation"),
+                                Description = GetDescription(xaml, param.GetAttributeValue<string>("name"), false)
                             })),
                         PluginSteps = pluginSteps.Entities
                             .Select(step => new PluginStep
@@ -280,6 +284,24 @@ namespace MarkMpn.CustomActionToApiConverter
             var wf = xml.SelectSingleNode("/act:Activity/mxswa:Workflow", nsmgr);
 
             return wf.HasChildNodes;
+        }
+
+        private string GetDescription(string xaml, string parameter, bool input)
+        {
+            var xml = new XmlDocument();
+            xml.LoadXml(xaml);
+            var nsmgr = new XmlNamespaceManager(xml.NameTable);
+            nsmgr.AddNamespace("act", "http://schemas.microsoft.com/netfx/2009/xaml/activities");
+            nsmgr.AddNamespace("x", "http://schemas.microsoft.com/winfx/2006/xaml");
+            var activity = (XmlElement)xml.SelectSingleNode("/act:Activity", nsmgr);
+            var mxswNamespace = activity.Attributes.Cast<XmlAttribute>().Single(attr => attr.Name.StartsWith("xmlns:") && attr.Value.StartsWith("clr-namespace:Microsoft.Xrm.Sdk.Workflow;"));
+            nsmgr.AddNamespace("mxsw", mxswNamespace.Value);
+            var prop = (XmlElement)xml.SelectSingleNode($"/act:Activity/x:Members/x:Property[@Name='{parameter}']/x:Property.Attributes[mxsw:ArgumentDirectionAttribute/@Value='{(input ? Microsoft.Xrm.Sdk.Workflow.ArgumentDirection.Input : Microsoft.Xrm.Sdk.Workflow.ArgumentDirection.Output)}']/mxsw:ArgumentDescriptionAttribute", nsmgr);
+
+            if (prop == null)
+                return null;
+
+            return prop.GetAttribute("Value");
         }
 
         private void convertButton_Click(object sender, EventArgs e)

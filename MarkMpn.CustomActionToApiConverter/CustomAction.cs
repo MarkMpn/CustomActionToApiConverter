@@ -199,6 +199,10 @@ namespace MarkMpn.CustomActionToApiConverter
         public string BindingTargetType { get; set; }
 
         private bool ShouldSerializeBindingTargetType() => false;
+
+        [ReadOnly(true)]
+        [Description("A description of the parameter")]
+        public string Description { get; set; }
     }
 
     class RequestParameter : Parameter
