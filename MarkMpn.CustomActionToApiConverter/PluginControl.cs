@@ -30,6 +30,9 @@ namespace MarkMpn.CustomActionToApiConverter
             InitializeComponent();
 
             _ai = new TelemetryClient(new Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration("79761278-a908-4575-afbf-2f4d82560da6"));
+
+            TabIcon = Properties.Resources.Icon32x32;
+            PluginIcon = Icon.FromHandle(Properties.Resources.Icon32x32.GetHicon());
         }
 
         protected override void OnConnectionUpdated(ConnectionUpdatedEventArgs e)
