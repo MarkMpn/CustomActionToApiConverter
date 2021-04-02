@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>MarkMpn.CustomActionToApiConverter</id>
+    <version>1.0.0</version>
+    <title>Custom Action to Custom API Converter</title>
+    <authors>Mark Carrington</authors>
+    <owners>MarkMpn</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectUrl>https://markcarrington.dev/custom-action-to-api-converter/</projectUrl>
+    <iconUrl>http://markcarrington.dev/sql4cds-icon/</iconUrl>
+    <description>Custom APIs are the latest and preferred way to add new messages into Dataverse, but the process of replacing existing Custom Actions can be time consuming and error prone.
+This tool ensures that all the Custom API configuration is compatible with the plugins registered against the Custom Action, and that the plugins are preserved during the conversion.</description>
+    <summary>Quickly and reliably convert Custom Actions to Custom APIs</summary>
+    <releaseNotes>First release</releaseNotes>
+    <copyright>Copyright © 2021 Mark Carrington</copyright>
+    <language>en-GB</language>
+    <tags>XrmToolBox Custom Action API Convert</tags>
+    <dependencies>
+      <dependency id="XrmToolBox" version="1.2020.12.43" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="bin\Release\MarkMpn.CustomActionToApiConverter.dll" target="lib\net452\Plugins\MarkMpn.CustomActionToApiConverter.dll" />
+  </files>
+</package>
