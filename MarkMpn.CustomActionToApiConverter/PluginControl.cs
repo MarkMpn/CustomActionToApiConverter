@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 using McTools.Xrm.Connection;
+using Microsoft.ApplicationInsights;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -22,9 +23,13 @@ namespace MarkMpn.CustomActionToApiConverter
 {
     public partial class PluginControl : PluginControlBase, IGitHubPlugin, IHelpPlugin, IPayPalPlugin
     {
+        private readonly TelemetryClient _ai;
+
         public PluginControl()
         {
             InitializeComponent();
+
+            _ai = new TelemetryClient(new Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration("79761278-a908-4575-afbf-2f4d82560da6"));
         }
 
         protected override void OnConnectionUpdated(ConnectionUpdatedEventArgs e)
@@ -318,6 +323,8 @@ namespace MarkMpn.CustomActionToApiConverter
                 if (MessageBox.Show("This Custom Action has a workflow component that will be lost during conversion to a Custom API. You will need to implement a plugin to replicate the same functionality as the workflow.\r\n\r\nAre you sure you want to continue?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                     return;
             }
+
+            _ai.TrackEvent("ConvertCustomActionToCustomApi");
 
             WorkAsync(new WorkAsyncInfo
             {
