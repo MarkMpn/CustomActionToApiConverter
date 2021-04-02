@@ -5,9 +5,9 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-- solution: '**/*.sln'
-- buildPlatform: 'x86'
-- buildConfiguration: 'Release'
+  solution: '**/*.sln'
+  buildPlatform: 'x86'
+  buildConfiguration: 'Release'
 
 steps:
 - checkout: self
