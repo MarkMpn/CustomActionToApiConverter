@@ -325,10 +325,10 @@ namespace MarkMpn.CustomActionToApiConverter
                 Work = (bw, args) =>
                 {
                     var solutionName = Service.Retrieve("solution", solutionId, new ColumnSet("uniquename")).GetAttributeValue<string>("uniquename");
-                    
+
+                    // Get the objecttypecodes for each component we want to add into the solution(s)
                     const string customapi = nameof(customapi);
-                    const string customapirequestparameter = nameof(customapirequestparameter);
-                    const string customapiresponseproperty = nameof(customapiresponseproperty);
+                    const string sdkmessageprocessingstep = nameof(sdkmessageprocessingstep);
 
                     var entityDetails = (RetrieveMetadataChangesResponse)Service.Execute(new RetrieveMetadataChangesRequest
                     {
@@ -338,7 +338,7 @@ namespace MarkMpn.CustomActionToApiConverter
                             {
                                 Conditions =
                                 {
-                                    new MetadataConditionExpression(nameof(EntityMetadata.LogicalName), MetadataConditionOperator.In, new object[] { customapi, customapirequestparameter, customapiresponseproperty })
+                                    new MetadataConditionExpression(nameof(EntityMetadata.LogicalName), MetadataConditionOperator.In, new object[] { customapi })
                                 }
                             },
                             Properties = new MetadataPropertiesExpression
@@ -349,103 +349,113 @@ namespace MarkMpn.CustomActionToApiConverter
                     });
                     var objectTypeCodes = entityDetails.EntityMetadata.ToDictionary(entity => entity.LogicalName, entity => entity.ObjectTypeCode.Value);
 
-                    // TODO: Save the sdkmessageprocessingsteps that are associated with the existing message, including which solutions they were part of and any associated images
+                    // Save the sdkmessageprocessingsteps that are associated with the existing message, including which solutions they were part of
+                    var stepQry = new QueryExpression(sdkmessageprocessingstep);
+                    stepQry.ColumnSet = new ColumnSet(true);
+                    stepQry.Criteria.AddCondition("stage", ConditionOperator.NotEqual, 30);
+                    var stepMsgLink = stepQry.AddLink("sdkmessage", "sdkmessageid", "sdkmessageid");
+                    stepMsgLink.LinkCriteria.AddCondition("name", ConditionOperator.Equal, action.MessageName);
+                    var solutionComponentLink = stepQry.AddLink("solutioncomponent", "sdkmessageprocessingstepid", "objectid", JoinOperator.LeftOuter);
+                    solutionComponentLink.LinkCriteria.AddCondition("componenttype", ConditionOperator.Equal, 92);
+                    var solutionLink = solutionComponentLink.AddLink("solution", "solutionid", "solutionid", JoinOperator.LeftOuter);
+                    solutionLink.EntityAlias = "solution";
+                    solutionLink.Columns = new ColumnSet("uniquename");
 
-                    // TODO: Delete the sdkmessageprocessingsteps. Do this in a transaction so that if one can't be deleted for some reason, we haven't lost any ones that have already been deleted
-                    Service.Execute(new ExecuteTransactionRequest
+                    var steps = Service.RetrieveMultiple(stepQry).Entities;
+
+                    // Delete the sdkmessageprocessingsteps. Do this in a transaction so that if one can't be deleted for some reason, we haven't lost any ones that have already been deleted
+                    var requests = new OrganizationRequestCollection();
+                    requests.AddRange(steps.Select(s => s.Id).Distinct().Select(id => new DeleteRequest { Target = new EntityReference(sdkmessageprocessingstep, id) }));
+
+                    requests.AddRange(
+                        // Unpublish the custom action
+                        new SetStateRequest
+                        {
+                            EntityMoniker = new EntityReference("workflow", action.WorkflowId),
+                            State = new OptionSetValue(0),
+                            Status = new OptionSetValue(1)
+                        },
+                            
+                        // Delete the custom action
+                        new DeleteRequest
+                        {
+                            Target = new EntityReference("workflow", action.WorkflowId)
+                        },
+
+                        // Create the custom API
+                        new CreateRequest
+                        {
+                            Target = new Entity(customapi)
+                            {
+                                ["allowedcustomprocessingsteptype"] = new OptionSetValue((int)action.AllowedCustomProcessingStepType),
+                                ["bindingtype"] = new OptionSetValue(action.PrimaryEntity == "none" ? 0 : 1),
+                                ["boundentitylogicalname"] = action.PrimaryEntity == "none" ? null : action.PrimaryEntity,
+                                ["description"] = action.Description ?? action.Name,
+                                ["displayname"] = action.Name,
+                                ["isfunction"] = action.IsFunction,
+                                ["isprivate"] = action.IsPrivate,
+                                ["name"] = action.Name,
+                                ["plugintypeid"] = action.Plugin,
+                                ["uniquename"] = action.MessageName,
+
+                                RelatedEntities =
+                                {
+                                    // Add the request parameters
+                                    [new Relationship("customapi_customapirequestparameter")] = new EntityCollection(action.RequestParameters.Where(p => !p.IsBindingTarget).Select(p => p.ToRequestParameterEntity(action)).ToList()),
+
+                                    // Add the response parameters
+                                    [new Relationship("customapi_customapiresponseproperty")] = new EntityCollection(action.ResponseParameters.Select(p => p.ToResponsePropertyEntity(action)).ToList())
+                                }
+                            }
+                        }
+                    );
+
+                    var response = (ExecuteTransactionResponse) Service.Execute(new ExecuteTransactionRequest { Requests = requests, ReturnResponses = true });
+
+                    // Recreate the sdkmessageprocessingsteps, ignoring any post-operation step that has been moved to stage 30
+                    // Can't do this in the transaction as the sdkmessageid will have changed, so get the new value first
+                    var messageQry = new QueryByAttribute("sdkmessage");
+                    messageQry.AddAttributeValue("name", action.MessageName);
+                    messageQry.ColumnSet = new ColumnSet("sdkmessageid");
+                    var message = Service.RetrieveMultiple(messageQry).Entities.Single();
+
+                    var stepsToRecreate = steps
+                        .GroupBy(s => s.Id)
+                        .Where(g => action.Plugin == null || g.Key != action.Plugin.Id || g.First().GetAttributeValue<OptionSetValue>("stage").Value != 40 || g.First().GetAttributeValue<OptionSetValue>("mode").Value != 0);
+
+                    foreach (var stepToRecreate in stepsToRecreate)
                     {
-                    });
+                        var step = RemoveAliasedValues(stepToRecreate.First());
+                        step["sdkmessageid"] = message.ToEntityReference();
 
-                    // Unpublish the custom action
-                    Service.Update(new Entity("workflow", action.WorkflowId)
-                    {
-                        ["statecode"] = new OptionSetValue(0),
-                        ["statuscode"] = new OptionSetValue(1)
-                    });
+                        // TODO: Update sdkmessagefilterid too
 
-                    // Delete the custom action
-                    Service.Delete("workflow", action.WorkflowId);
+                        Service.Create(step);
 
-                    // Create the custom API
-                    var api = new Entity(customapi)
-                    {
-                        ["allowedcustomprocessingsteptype"] = new OptionSetValue((int)action.AllowedCustomProcessingStepType),
-                        ["bindingtype"] = new OptionSetValue(action.PrimaryEntity == "none" ? 0 : 1),
-                        ["boundentitylogicalname"] = action.PrimaryEntity == "none" ? null : action.PrimaryEntity,
-                        ["description"] = action.Description ?? action.Name,
-                        ["displayname"] = action.Name,
-                        ["isfunction"] = action.IsFunction,
-                        ["isprivate"] = action.IsPrivate,
-                        ["name"] = action.Name,
-                        ["plugintypeid"] = action.Plugin,
-                        ["uniquename"] = action.MessageName
-                    };
-                    api.Id = Service.Create(api);
+                        // Add the step back into its original solution(s)
+                        if (step.Contains("solution.uniquename"))
+                        {
+                            foreach (var solution in stepToRecreate.Select(s => (string)s.GetAttributeValue<AliasedValue>("solution.uniquename").Value))
+                            {
+                                Service.Execute(new AddSolutionComponentRequest
+                                {
+                                    ComponentId = step.Id,
+                                    ComponentType = 92,
+                                    SolutionUniqueName = solution
+                                });
+                            }
+                        }
+                    }
+
+                    // Add the newly created Custom API into the solution
+                    var apiCreateResponse = response.Responses.OfType<CreateResponse>().First();
+
                     Service.Execute(new AddSolutionComponentRequest
                     {
-                        ComponentId = api.Id,
-                        ComponentType = objectTypeCodes[api.LogicalName],
+                        ComponentId = apiCreateResponse.id,
+                        ComponentType = objectTypeCodes[customapi],
                         SolutionUniqueName = solutionName
                     });
-
-                    // Add the request parameters
-                    foreach (var actionParam in action.RequestParameters)
-                    {
-                        if (actionParam.IsBindingTarget)
-                            continue;
-
-                        var apiParam = new Entity(customapirequestparameter)
-                        {
-                            ["customapiid"] = api.ToEntityReference(),
-                            ["description"] = actionParam.Description,
-                            ["displayname"] = actionParam.Name,
-                            ["isoptional"] = !actionParam.Required,
-                            ["logicalentityname"] = actionParam.BindingTargetType,
-                            ["name"] = $"{action.MessageName}.{actionParam.Name}",
-                            ["type"] = actionParam.TypeOptionSetValue,
-                            ["uniquename"] = actionParam.Name
-                        };
-
-                        apiParam.Id = Service.Create(apiParam);
-                        Service.Execute(new AddSolutionComponentRequest
-                        {
-                            ComponentId = apiParam.Id,
-                            ComponentType = objectTypeCodes[apiParam.LogicalName],
-                            SolutionUniqueName = solutionName
-                        });
-                    }
-
-                    // Add the response parameters
-                    foreach (var actionProp in action.ResponseParameters)
-                    {
-                        var apiProp = new Entity(customapiresponseproperty)
-                        {
-                            ["customapiid"] = api.ToEntityReference(),
-                            ["description"] = actionProp.Description,
-                            ["displayname"] = actionProp.Name,
-                            ["logicalentityname"] = actionProp.BindingTargetType,
-                            ["name"] = $"{action.MessageName}.{actionProp.Name}",
-                            ["type"] = actionProp.TypeOptionSetValue,
-                            ["uniquename"] = actionProp.Name
-                        };
-
-                        apiProp.Id = Service.Create(apiProp);
-                        Service.Execute(new AddSolutionComponentRequest
-                        {
-                            ComponentId = apiProp.Id,
-                            ComponentType = objectTypeCodes[apiProp.LogicalName],
-                            SolutionUniqueName = solutionName
-                        });
-                    }
-
-                    // Remove the post-operation step that has been moved to stage 30
-                    if (action.Plugin != null)
-                    {
-                        var step = action.PluginSteps.First(s => s.PluginId == action.Plugin.Id && s.Stage == 40 && s.Sync);
-                        Service.Delete("sdkmessageprocessingstep", step.StepId);
-                    }
-
-                    // TODO: Recreate the sdkmessageprocessingsteps
                 },
                 PostWorkCallBack = args =>
                 {
@@ -456,6 +466,21 @@ namespace MarkMpn.CustomActionToApiConverter
                     solutionComboBox_SelectedIndexChanged(sender, e);
                 }
             });
+        }
+
+        private Entity RemoveAliasedValues(Entity entity)
+        {
+            var copy = new Entity(entity.LogicalName, entity.Id);
+
+            foreach (var attr in entity.Attributes)
+            {
+                if (attr.Value is AliasedValue)
+                    continue;
+
+                copy.Attributes.Add(attr);
+            }
+
+            return copy;
         }
     }
 }

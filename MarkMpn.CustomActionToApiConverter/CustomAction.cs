@@ -256,10 +256,44 @@ namespace MarkMpn.CustomActionToApiConverter
         public bool Required { get; set; }
 
         private bool ShouldSerializeRequired() => false;
+
+        internal Entity ToRequestParameterEntity(CustomAction action)
+        {
+            const string customapirequestparameter = nameof(customapirequestparameter);
+
+            var apiParam = new Entity(customapirequestparameter)
+            {
+                ["description"] = Description,
+                ["displayname"] = Name,
+                ["isoptional"] = !Required,
+                ["logicalentityname"] = BindingTargetType,
+                ["name"] = $"{action.MessageName}.{Name}",
+                ["type"] = TypeOptionSetValue,
+                ["uniquename"] = Name
+            };
+
+            return apiParam;
+        }
     }
 
     class ResponseParameter : Parameter
     {
+        internal Entity ToResponsePropertyEntity(CustomAction action)
+        {
+            const string customapiresponseproperty = nameof(customapiresponseproperty);
+
+            var apiProp = new Entity(customapiresponseproperty)
+            {
+                ["description"] = Description,
+                ["displayname"] = Name,
+                ["logicalentityname"] = BindingTargetType,
+                ["name"] = $"{action.MessageName}.{Name}",
+                ["type"] = TypeOptionSetValue,
+                ["uniquename"] = Name
+            };
+
+            return apiProp;
+        }
     }
 
     class ParameterConverter : ExpandableObjectConverter
