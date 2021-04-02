@@ -413,22 +413,26 @@ namespace MarkMpn.CustomActionToApiConverter
                     var response = (ExecuteTransactionResponse) Service.Execute(new ExecuteTransactionRequest { Requests = requests, ReturnResponses = true });
 
                     // Recreate the sdkmessageprocessingsteps, ignoring any post-operation step that has been moved to stage 30
-                    // Can't do this in the transaction as the sdkmessageid will have changed, so get the new value first
-                    var messageQry = new QueryByAttribute("sdkmessage");
-                    messageQry.AddAttributeValue("name", action.MessageName);
+                    // Can't do this in the transaction as the sdkmessageid and sdkmessagefilterid will have changed, so get the new value first
+                    var messageQry = new QueryExpression("sdkmessage");
+                    messageQry.Criteria.AddCondition("name", ConditionOperator.Equal, action.MessageName);
                     messageQry.ColumnSet = new ColumnSet("sdkmessageid");
+                    var filterLink = messageQry.AddLink("sdkmessagefilter", "sdkmessageid", "sdkmessageid");
+                    filterLink.EntityAlias = "filter";
+                    filterLink.Columns = new ColumnSet("sdkmessagefilterid");
                     var message = Service.RetrieveMultiple(messageQry).Entities.Single();
 
+                    var coreStep = action.PluginSteps.FirstOrDefault(s => action.Plugin != null && s.PluginId == action.Plugin.Id && s.Stage == 40 && s.Sync);
                     var stepsToRecreate = steps
-                        .GroupBy(s => s.Id)
-                        .Where(g => action.Plugin == null || g.Key != action.Plugin.Id || g.First().GetAttributeValue<OptionSetValue>("stage").Value != 40 || g.First().GetAttributeValue<OptionSetValue>("mode").Value != 0);
+                        .Where(s => coreStep == null || s.Id != coreStep.StepId)
+                        .Where(s => action.AllowedCustomProcessingStepType == AllowedCustomProcessingStepType.SyncAndAsync || action.AllowedCustomProcessingStepType == AllowedCustomProcessingStepType.AsyncOnly && s.GetAttributeValue<OptionSetValue>("mode").Value == 1)
+                        .GroupBy(s => s.Id);
 
                     foreach (var stepToRecreate in stepsToRecreate)
                     {
                         var step = RemoveAliasedValues(stepToRecreate.First());
                         step["sdkmessageid"] = message.ToEntityReference();
-
-                        // TODO: Update sdkmessagefilterid too
+                        step["sdkmessagefilterid"] = new EntityReference("sdkmessagefilter", (Guid) message.GetAttributeValue<AliasedValue>("filter.sdkmessagefilterid").Value);
 
                         Service.Create(step);
 
