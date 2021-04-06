@@ -44,7 +44,7 @@ namespace MarkMpn.CustomActionToApiConverter
 
         private void LoadSolutions()
         {
-            solutionComboBox.Items.Clear();
+            solutionComboBox.DataSource = null;
 
             if (ConnectionDetail == null)
                 return;
@@ -82,6 +82,9 @@ namespace MarkMpn.CustomActionToApiConverter
                     solutionComboBox.DisplayMember = nameof(EntityReference.Name);
                     solutionComboBox.ValueMember = nameof(EntityReference.Id);
                     solutionComboBox.DataSource = solutions;
+
+                    if (solutions.Count == 0)
+                        MessageBox.Show("No solutions were found that contain a Custom Action. Please connect to an organization that has at least one solution that contains a Custom Action", "No Custom Action Solutions Found", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             });
         }
@@ -321,6 +324,9 @@ namespace MarkMpn.CustomActionToApiConverter
             var action = (CustomAction)propertyGrid.SelectedObject;
             var solutionId = (Guid)solutionComboBox.SelectedValue;
 
+            if (MessageBox.Show("This process will delete your Custom Action and recreate it as a Custom API. As with any delete operation, this has the potential for data loss. You should only continue if you have a recent backup, and/or have exported an unmanaged copy of your solution that you can re-import if necessary.\r\n\r\nAre you sure you want to continue?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
             if (action.HasWorkflow)
             {
                 if (MessageBox.Show("This Custom Action has a workflow component that will be lost during conversion to a Custom API. You will need to implement a plugin to replicate the same functionality as the workflow.\r\n\r\nAre you sure you want to continue?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
@@ -475,6 +481,8 @@ namespace MarkMpn.CustomActionToApiConverter
                 {
                     if (args.Error != null)
                         MessageBox.Show(args.Error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    else
+                        MessageBox.Show($"Your Custom Action {action.MessageName} has been deleted and an equivalent Custom API has been created", "Conversion Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                     // Refresh the list of available actions
                     solutionComboBox_SelectedIndexChanged(sender, e);

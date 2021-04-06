@@ -8,11 +8,12 @@
     <owners>MarkMpn</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectUrl>https://markcarrington.dev/custom-action-to-api-converter/</projectUrl>
-    <iconUrl>http://markcarrington.dev/sql4cds-icon/</iconUrl>
+    <iconUrl>http://markcarrington.dev/customactionconverter-icon/</iconUrl>
     <description>Custom APIs are the latest and preferred way to add new messages into Dataverse, but the process of replacing existing Custom Actions can be time consuming and error prone.
 This tool ensures that all the Custom API configuration is compatible with the plugins registered against the Custom Action, and that the plugins are preserved during the conversion.</description>
     <summary>Quickly and reliably convert Custom Actions to Custom APIs</summary>
-    <releaseNotes>First release</releaseNotes>
+    <releaseNotes>Show warning if no solutions are found containing Custom Actions
+Show confirmation messages before and after conversion</releaseNotes>
     <copyright>Copyright © 2021 Mark Carrington</copyright>
     <language>en-GB</language>
     <tags>XrmToolBox Custom Action API Convert</tags>
